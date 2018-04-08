@@ -36,7 +36,7 @@ bool lectura_CNYS[8]; // Lectura de los sensores para el controlador PD
 /*
  *CONTROL PID
  */
-int VELOCIDAD_BASE = 75; // Velocidad base
+int VELOCIDAD_BASE = 50; // Velocidad base
 const int REFERENCIA_DIRECCION = 9; // Dirección de referencia
 
 int KP = 20; // Constante proporcional #40
@@ -87,17 +87,17 @@ bool bifurcacion_pasada = false; // Para indicar que se ha pasado la bifurcació
 
 byte ancho_lectura; // Variable que mide el ancho de lectura en distancia
                     // entre sensores más extremos de cada lado
-                    // Sirve para evitar voler a SIGUELINEAS sin haber salido de
+                    // Sirve para evitar volver a SIGUELINEAS sin haber salido de
                     // la bifurcación
 
 
 /*
  * VARIABLES PARA CONTROL DEL TIEMPO
  */
-unsigned long tiempo_comienzo = 0;
-unsigned long tiempo_fin = 0;
-unsigned int TIEMPO_PID = 3;
-unsigned int TIEMPO_RESETEO_MARCAS = 5000;
+unsigned long tiempo_ciclo = 0;
+unsigned long tiempo_ciclo_anterior = 0;
+unsigned int TIEMPO_PID = 1200;
+unsigned long TIEMPO_RESETEO_MARCAS = 5000000; // Equivale a 5 segundos
 
 /*
  * ESTADOS DE LA MÁQUINA DE ESTADOS FINITOS (FSM)
@@ -110,7 +110,7 @@ enum TipoMaquinaEstadosFinitos
     ELECCION_CAMINO
 };
 
-TipoMaquinaEstadosFinitos estado_finito = REPOSO;
+TipoMaquinaEstadosFinitos estado_finito = SIGUELINEAS;
 
 /*
  * VARIABLE PARA CONTROL DE SENTIDO DE GIRO DE LOS MOTORES
@@ -163,7 +163,10 @@ void setup()
 
     //configurarBluethoot(); // Función para configurar el Bluethoot
 
-    Serial.begin(9600); // Inicia comunicaciones serie a 9600 bps
+    //Serial.begin(9600); // Inicia comunicaciones serie a 9600 bps
+    Serial.begin(115200); // Inicia comunicaciones serie a 115200 bps;
+
+    controlMotores(0, 0); // Motores parados en el setup
 }
 
 /*
@@ -177,7 +180,7 @@ void loop()
         /*
          * 1: Estado de reposo del rastreador
          */
-        case TipoMaquinaEstadosFinitos::REPOSO:
+        case REPOSO:
 
             controlMotores(0, 0); // Motores parados
             flag_salida = false; // Para que al pasar al estado SIGUELÍNEAS comience la cuenta atrás
@@ -189,21 +192,21 @@ void loop()
             // Elección de estado SIGUELINEAS
             if (digitalRead(BOTON_1) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::SIGUELINEAS;
+                delay(200);
+                estado_finito = SIGUELINEAS;
             }
             // Elección de estado CALIBRACION
             else if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::CALIBRACION;
+                delay(200);
+                estado_finito = CALIBRACION;
             }
             break;
 
         /*
          * 2: Estado de calibración de los sensores
          */
-        case TipoMaquinaEstadosFinitos::CALIBRACION:
+        case CALIBRACION:
 
             digitalWrite(LED_1, HIGH); // Señal de estado CALIBRACION
             digitalWrite(LED_2, LOW);
@@ -212,14 +215,14 @@ void loop()
             // Activado de la calibración
             if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (200);
+                delay(200);
                 REFERENCIA_COLOR = calibracionCNYS();
             }
             // Elección de estado SIGUELINEAS
             else if (digitalRead(BOTON_1) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::SIGUELINEAS;
+                delay(200);
+                estado_finito = SIGUELINEAS;
             }
 
             break;
@@ -227,7 +230,7 @@ void loop()
         /*
          * 3: Estado normal de siguimiento de línea
          */
-        case TipoMaquinaEstadosFinitos::SIGUELINEAS:
+        case SIGUELINEAS:
 
             // Si está a 0, realiza la cuenta atrás, si está a 1 la obvia
             if (flag_salida == false)
@@ -240,95 +243,96 @@ void loop()
                 for (byte i = 0; i < 5; i++)
                 {
                     digitalWrite(LED_1, HIGH);
-                    delay (TIEMPO_LED_SALIDA);
+                    delay(TIEMPO_LED_SALIDA);
                     digitalWrite(LED_1, LOW);
-                    delay (TIEMPO_LED_SALIDA);
+                    delay(TIEMPO_LED_SALIDA);
                 }
             }
 
-            VELOCIDAD_BASE = 70;
+            tiempo_ciclo = micros(); // Se mide el tiempo antes del PID
 
-            lecturaCnys(); // Lectura de los sensores
+            // Cada ciclo se ejecuta todo el proceso PID
+            if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_PID)
+            { Serial.println(tiempo_ciclo - tiempo_ciclo_anterior);
+                tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
-            marcasFrenadaNegro(); // Se comprueban si hay marcas de parada tras la lectura
-            marcasFrenadaBlanco();
+                lecturaCnys(); // Lectura de los sensores
 
-            tiempo_comienzo = millis();
+                marcasFrenadaNegro(); // Se comprueban si hay marcas de parada tras la lectura
+                marcasFrenadaBlanco();
 
-            // Se resetan los contadores de frenada si se sobrepasa un tiempo dado
-            if (tiempo_comienzo - tiempo_fin >= TIEMPO_RESETEO_MARCAS)
-            {
-                contador_parada_negro = 0;
-                contador_parada_blanco = 0;
-                tiempo_fin = millis();
-            }
-
-            // En caso de estar mucho tiempo sobre blanco total o negro total se detiene el vehículo
-            if (contador_parada_blanco > MARCA_PARADA_BLANCO || contador_parada_negro > MARCA_PARADA_NEGRO)
-            {
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
-                limpiezaVariables();
-            }
-
-            numero_lineas = comprobarNumeroLineas(); // Comprobamos el número de líneas detectadas
-
-            // Cambiamos de estado finito si terminamos de leer la marca
-            // y se vuelve a tener sólo una línea
-            if ((marca_real > MARCA_MINIMA) && (numero_lineas == 1))
-            {
-                estado_finito = TipoMaquinaEstadosFinitos::ELECCION_CAMINO;
-                break;
-            }
-
-            // Se va comprobando si hay marcas y/o falsos positivos
-            if (numero_lineas <= 1) // Parece que no hay marcas
-            {
-                marca_real = 0;
-                digitalWrite(LED_1, LOW);
-                digitalWrite(LED_3, LOW);
-
-                calculoDireccionNormal(); // Cálculo de la dirección actual
-                controlPD(); // Cálculo del PID
-                actuacionMotores(control_pwm); // Actuación sobre los motores
-            }
-
-            if (numero_lineas > 1) // Parece que hay una marca
-            {
-                // Se espera para asegurar una lectura correcta del lado de la marca
-                if (marca_real > 10 && marca_real < 15)
+                // Se resetan los contadores de frenada si se sobrepasa un tiempo dado
+                if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_RESETEO_MARCAS)
                 {
-                    sentido_marca = comprobarLadoMarca(); // Comprobación del lado de la marca
-
-                    // Se marca con leds el lado de la marca
-                    if (sentido_marca == TipoSentidoMarca::DERECHO)
-                    {
-                        digitalWrite(LED_1, HIGH);
-                    }
-                    if (sentido_marca == TipoSentidoMarca::IZQUIERDO)
-                    {
-                        digitalWrite(LED_3, HIGH);
-                    }
-                    if (sentido_marca == TipoSentidoMarca::RECTO)
-                    {
-                        digitalWrite(LED_1, HIGH);
-                        digitalWrite(LED_3, HIGH);
-                    }
+                    contador_parada_negro = 0;
+                    contador_parada_blanco = 0;
                 }
 
-                marca_real++; // Contador para asegurar que es una marca real
+                // En caso de estar mucho tiempo sobre blanco total o negro total se detiene el vehículo
+                if (contador_parada_blanco > MARCA_PARADA_BLANCO || contador_parada_negro > MARCA_PARADA_NEGRO)
+                {
+                    estado_finito = REPOSO;
+                    limpiezaVariables();
+                }
 
-                VELOCIDAD_BASE = 70;
+                numero_lineas = comprobarNumeroLineas(); // Comprobamos el número de líneas detectadas
 
-                calculoDireccionRecto();
-                controlPD(); // Cálculo del PID
-                actuacionMotores(control_pwm); // Actuación sobre los motores
+                // Cambiamos de estado finito si terminamos de leer la marca
+                // y se vuelve a tener sólo una línea
+                if ((marca_real > MARCA_MINIMA) && (numero_lineas == 1))
+                {
+                    estado_finito = ELECCION_CAMINO;
+                    break;
+                }
+
+                // Se va comprobando si hay marcas y/o falsos positivos
+                if (numero_lineas <= 1) // Parece que no hay marcas
+                {
+                    marca_real = 0;
+                    digitalWrite(LED_1, LOW);
+                    digitalWrite(LED_3, LOW);
+
+                    calculoDireccionNormal(); // Cálculo de la dirección actual
+                    controlPD(); // Cálculo del PID
+                    actuacionMotores(); // Actuación sobre los motores
+                }
+
+                if (numero_lineas > 1) // Parece que hay una marca
+                {
+                    // Se espera para asegurar una lectura correcta del lado de la marca
+                    if (marca_real > 10 && marca_real < 15)
+                    {
+                        sentido_marca = comprobarLadoMarca(); // Comprobación del lado de la marca
+
+                        // Se marca con leds el lado de la marca
+                        if (sentido_marca == DERECHO)
+                        {
+                            digitalWrite(LED_1, HIGH);
+                        }
+                        if (sentido_marca == IZQUIERDO)
+                        {
+                            digitalWrite(LED_3, HIGH);
+                        }
+                        if (sentido_marca == RECTO)
+                        {
+                            digitalWrite(LED_1, HIGH);
+                            digitalWrite(LED_3, HIGH);
+                        }
+                    }
+
+                    marca_real++; // Contador para asegurar que es una marca real
+
+                    calculoDireccionRecto();
+                    controlPD(); // Cálculo del PID
+                    actuacionMotores(); // Actuación sobre los motores
+                }
             }
 
             // Elección de estado REPOSO
             if (digitalRead(BOTON_2) == HIGH)
             {
                 delay(500);
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
+                estado_finito = REPOSO;
                 limpiezaVariables();
             }
 
@@ -339,71 +343,75 @@ void loop()
          */
         case ELECCION_CAMINO:
 
-            //VELOCIDAD_BASE = 50;
+            tiempo_ciclo = micros(); // Se mide el tiempo antes del PID
 
-            //digitalWrite (LED_2, LOW);
-
-            if (contador_parada_blanco > MARCA_PARADA_BLANCO)
+            // Cada ciclo se ejecuta todo el proceso PID
+            if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_RESETEO_MARCAS)
             {
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
-                limpiezaVariables();
-            }
+                tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
-            lecturaCnys(); // Lectura de los sensores
-            marcasFrenadaBlanco(); // Se comprueban si hay marcas de parada tras la lectura
-            ancho_lectura = anchoLectura(sensorIzquierda(lectura_CNYS), sensorDerecha(lectura_CNYS));
-
-            bifurcacion = deteccionBifurcacion();
-
-            if (bifurcacion == false && bifurcacion_pasada == false && ancho_lectura <= 1)
-            {
-                //calculoDireccionRecto (); // Cálculo de la dirección actual
-                calculoDireccionNormal(); // Cálculo de la dirección actual
-                controlPD(); // Cálculo del PID
-                actuacionMotores(control_pwm); // Actuación sobre los motores
-            }
-
-            // PROBAR WHILE o IF
-            if (bifurcacion == true || ancho_lectura >= 3)
-            {
-                // Para indicar la detección de la bifurcación de forma visual
-                digitalWrite(LED_2, LOW);
-
-                if (sentido_marca == TipoSentidoMarca::DERECHO) // Marca a la derecha
+                if (contador_parada_blanco > MARCA_PARADA_BLANCO)
                 {
-                    calculoDireccionDerecha(); // Sólo se lee por la derecha
+                    estado_finito = REPOSO;
+                    limpiezaVariables();
                 }
 
-                if (sentido_marca == TipoSentidoMarca::IZQUIERDO) // Marca a la izquierda
+                lecturaCnys(); // Lectura de los sensores
+                marcasFrenadaBlanco(); // Se comprueban si hay marcas de parada tras la lectura
+                ancho_lectura = anchoLectura(sensorIzquierda(), sensorDerecha());
+
+                bifurcacion = deteccionBifurcacion();
+
+                if (bifurcacion == false && bifurcacion_pasada == false && ancho_lectura <= 1)
                 {
-                    calculoDireccionIzquierda(); // Sólo se lee por la izquierda
+                    //calculoDireccionRecto (); // Cálculo de la dirección actual
+                    calculoDireccionNormal(); // Cálculo de la dirección actual
+                    controlPD(); // Cálculo del PID
+                    actuacionMotores(); // Actuación sobre los motores
                 }
 
-                if (sentido_marca == TipoSentidoMarca::RECTO) // Marca a ambos lados
+                // PROBAR WHILE o IF
+                if (bifurcacion == true || ancho_lectura >= 3)
                 {
-                    calculoDireccionRecto(); // Sólo se lee por el centro
+                    // Para indicar la detección de la bifurcación de forma visual
+                    digitalWrite(LED_2, LOW);
+
+                    if (sentido_marca == DERECHO) // Marca a la derecha
+                    {
+                        calculoDireccionDerecha(); // Sólo se lee por la derecha
+                    }
+
+                    if (sentido_marca == IZQUIERDO) // Marca a la izquierda
+                    {
+                        calculoDireccionIzquierda(); // Sólo se lee por la izquierda
+                    }
+
+                    if (sentido_marca == RECTO) // Marca a ambos lados
+                    {
+                        calculoDireccionRecto(); // Sólo se lee por el centro
+                    }
+
+                    controlPD(); // Cálculo del PID
+                    actuacionMotores(); // Actuación sobre los motores
+                    bifurcacion_pasada = true;
                 }
 
-                controlPD(); // Cálculo del PID
-                actuacionMotores(control_pwm); // Actuación sobre los motores
-                bifurcacion_pasada = true;
-            }
-
-            // Volver a SIGUELINEAS
-            if (bifurcacion == false && bifurcacion_pasada == true && ancho_lectura <= 1)
-            {
-                digitalWrite(LED_1, LOW);
-                digitalWrite(LED_2, HIGH);
-                digitalWrite(LED_3, LOW);
-                estado_finito = TipoMaquinaEstadosFinitos::SIGUELINEAS;
-                limpiezaVariables();
+                // Volver a SIGUELINEAS
+                if (bifurcacion == false && bifurcacion_pasada == true && ancho_lectura <= 1)
+                {
+                    digitalWrite(LED_1, LOW);
+                    digitalWrite(LED_2, HIGH);
+                    digitalWrite(LED_3, LOW);
+                    estado_finito = SIGUELINEAS;
+                    limpiezaVariables();
+                }
             }
 
             // Elección de estado REPOSO
             if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (500);
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
+                delay(500);
+                estado_finito = REPOSO;
                 limpiezaVariables();
             }
 

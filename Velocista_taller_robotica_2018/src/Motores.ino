@@ -5,15 +5,15 @@ void motorIzquierdo(TipoSentidoMotor sentido_motor)
 {
     switch (sentido_motor)
     {
-        case TipoSentidoMotor::ADELANTE:
+        case ADELANTE:
             digitalWrite(ENTRADA_A_MOTOR_IZQUIERDO, HIGH);
             digitalWrite(ENTRADA_B_MOTOR_IZQUIERDO, LOW);
             break;
-        case TipoSentidoMotor::ATRAS:
+        case ATRAS:
             digitalWrite(ENTRADA_A_MOTOR_IZQUIERDO, LOW);
             digitalWrite(ENTRADA_B_MOTOR_IZQUIERDO, HIGH);
             break;
-        case TipoSentidoMotor::STOP:
+        case STOP:
             digitalWrite(ENTRADA_A_MOTOR_IZQUIERDO, HIGH);
             digitalWrite(ENTRADA_B_MOTOR_IZQUIERDO, HIGH);
             break;
@@ -27,15 +27,15 @@ void motorDerecho(TipoSentidoMotor sentido_motor)
 {
     switch (sentido_motor)
     {
-        case TipoSentidoMotor::ADELANTE:
+        case ADELANTE:
             digitalWrite(ENTRADA_A_MOTOR_DERECHO, HIGH);
             digitalWrite(ENTRADA_B_MOTOR_DERECHO, LOW);
             break;
-        case TipoSentidoMotor::ATRAS:
+        case ATRAS:
             digitalWrite(ENTRADA_A_MOTOR_DERECHO, LOW);
             digitalWrite(ENTRADA_B_MOTOR_DERECHO, HIGH);
             break;
-        case TipoSentidoMotor::STOP:
+        case STOP:
             digitalWrite(ENTRADA_A_MOTOR_DERECHO, HIGH);
             digitalWrite(ENTRADA_B_MOTOR_DERECHO, HIGH);
             break;
@@ -55,7 +55,7 @@ void controlMotores(int motor_izquierdo, int motor_derecho)
         {
             motor_izquierdo = 255;
         }
-        motorIzquierdo(TipoSentidoMotor::ADELANTE);
+        motorIzquierdo(ADELANTE);
         analogWrite(PWM_MOTOR_IZQUIERDO, motor_izquierdo);
     }
     else if (motor_izquierdo < 0)
@@ -65,12 +65,12 @@ void controlMotores(int motor_izquierdo, int motor_derecho)
         {
             motor_izquierdo = -255;
         }
-        motorIzquierdo(TipoSentidoMotor::ATRAS);
+        motorIzquierdo(ATRAS);
         analogWrite(PWM_MOTOR_IZQUIERDO, -motor_izquierdo);
     }
     else // Velocidad 0
     {
-        motorIzquierdo(TipoSentidoMotor::STOP);
+        motorIzquierdo(STOP);
         analogWrite(PWM_MOTOR_IZQUIERDO, 255);
     }
 
@@ -82,7 +82,7 @@ void controlMotores(int motor_izquierdo, int motor_derecho)
         {
             motor_derecho = 255;
         }
-        motorDerecho(TipoSentidoMotor::ADELANTE);
+        motorDerecho(ADELANTE);
         analogWrite(PWM_MOTOR_DERECHO, motor_derecho);
     }
     else if (motor_derecho < 0)
@@ -92,12 +92,12 @@ void controlMotores(int motor_izquierdo, int motor_derecho)
         {
             motor_derecho = -255;
         }
-        motorDerecho(TipoSentidoMotor::ATRAS);
+        motorDerecho(ATRAS);
         analogWrite(PWM_MOTOR_DERECHO, -motor_derecho);
     }
     else // Velocidad 0
     {
-        motorDerecho(TipoSentidoMotor::STOP);
+        motorDerecho(STOP);
         analogWrite(PWM_MOTOR_DERECHO, 255);
     }
 }

@@ -1,28 +1,28 @@
 /*
  * Función para obtener el sensor activo más a la derecha
  */
-int sensorDerecha(bool lectura_CNYS_para_PD[6])
+int sensorDerecha()
 {
-    if (lectura_CNYS_para_PD[5] == 1) return(6); // Sensor más a la derecha
-    if (lectura_CNYS_para_PD[4] == 1) return(5);
-    if (lectura_CNYS_para_PD[3] == 1) return(4);
-    if (lectura_CNYS_para_PD[2] == 1) return(3);
-    if (lectura_CNYS_para_PD[1] == 1) return(2);
-    if (lectura_CNYS_para_PD[0] == 1) return(1); // Sensor más a la izquierda
+    if (lectura_CNYS[5] == 1) return(6); // Sensor más a la derecha
+    if (lectura_CNYS[4] == 1) return(5);
+    if (lectura_CNYS[3] == 1) return(4);
+    if (lectura_CNYS[2] == 1) return(3);
+    if (lectura_CNYS[1] == 1) return(2);
+    if (lectura_CNYS[0] == 1) return(1); // Sensor más a la izquierda
     return(0); // No se detecta la línea
 }
 
 /*
  * Función para obtener el sensor activo más a la izquierda
  */
-int sensorIzquierda(bool lectura_CNYS_para_PD[6])
+int sensorIzquierda()
 {
-    if (lectura_CNYS_para_PD[0] == 1) return(1); // Sensor más a la izquierda
-    if (lectura_CNYS_para_PD[1] == 1) return(2);
-    if (lectura_CNYS_para_PD[2] == 1) return(3);
-    if (lectura_CNYS_para_PD[3] == 1) return(4);
-    if (lectura_CNYS_para_PD[4] == 1) return(5);
-    if (lectura_CNYS_para_PD[5] == 1) return(6); // Sensor más a la derecha
+    if (lectura_CNYS[0] == 1) return(1); // Sensor más a la izquierda
+    if (lectura_CNYS[1] == 1) return(2);
+    if (lectura_CNYS[2] == 1) return(3);
+    if (lectura_CNYS[3] == 1) return(4);
+    if (lectura_CNYS[4] == 1) return(5);
+    if (lectura_CNYS[5] == 1) return(6); // Sensor más a la derecha
     return(0); // No se detecta la línea
 }
 
@@ -57,14 +57,13 @@ void marcasFrenada()
  */
 void calculoDireccion() // Para dirección normal
 {
-    direccion = sensorDerecha(lectura_CNYS) + sensorIzquierda(lectura_CNYS);
+    direccion = sensorDerecha() + sensorIzquierda();
 }
 
 /*
- * Función para el control PD
+ * Función para el control PID
  */
-//TipoPID controlPD (TipoPID PID)
-void controlPD()
+void controlPID()
 {
     // Si perdemos la línea seguimos en la última dirección detectada
     if (direccion == 0) direccion = direccion_anterior;
@@ -80,7 +79,7 @@ void controlPD()
 /*
  * Función para actuar sobre los motores con la salida del PID
  */
-void actuacionMotores(int control_pwm)
+void actuacionMotores()
 {
     int motor_derecho_pwm;      // Señal PWM del motor derecho
     int motor_izquierdo_pwm;    // Señal PWM del motor izquierda

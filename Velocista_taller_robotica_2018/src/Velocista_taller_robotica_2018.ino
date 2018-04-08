@@ -42,7 +42,7 @@ bool lectura_CNYS[6]; // Lectura de los sensores para el controlador PD
  *CONTROL PID
  */
 const int REFERENCIA_DIRECCION = 7; // Dirección de referencia
-int VELOCIDAD_BASE = 180; // Velocidad base
+int VELOCIDAD_BASE = 255; // Velocidad base
 
 int KP = 30;            // Constante proporcional
 int KI = 0;             // Constante integral
@@ -67,12 +67,12 @@ int MARCA_PARADA_BLANCO = 1000; // Variable para el tiempo de parada en color bl
 int MARCA_PARADA_NEGRO = 500; // Variable para el tiempo de parada en color negro de la pista
 
 /*
- * VARIABLES PARA CONTROL DEL TIEMPO
+ * VARIABLES PARA CONTROL DEL TIEMPO (EN MICROSEGUNDOS)
  */
-unsigned long tiempo_comienzo = 0;
-unsigned long tiempo_fin = 0;
-unsigned int TIEMPO_PID = 3;
-unsigned int TIEMPO_RESETEO_MARCAS = 5000;
+unsigned long tiempo_ciclo = 0;
+unsigned long tiempo_ciclo_anterior = 0;
+unsigned int TIEMPO_PID = 900;
+unsigned long TIEMPO_RESETEO_MARCAS = 5000000; // Equivale a 5 segundos
 
 /*
  * ESTADOS DE LA MÁQUINA DE ESTADOS FINITOS (FSM)
@@ -139,6 +139,9 @@ void setup()
     //configurarBluethoot(); // Función para configurar el Bluethoot
 
     Serial.begin(9600); // Inicia comunicaciones serie a 9600 bps
+    //Serial.begin(115200); // Inicia comunicaciones serie a 115200 bps;
+
+    controlMotores(0, 0); // Motores parados en el setup
 }
 
 /*
@@ -152,7 +155,7 @@ void loop()
         /*
         * 1: Estado de reposo del rastreador
         */
-        case TipoMaquinaEstadosFinitos::REPOSO:
+        case REPOSO:
 
             controlMotores (0, 0); // Motores parados
             flag_salida = false; // Para que al pasar al estado SIGUELÍNEAS comience la cuenta atrás
@@ -165,25 +168,25 @@ void loop()
             digitalWrite(LED_2, HIGH); // Señal de estado REPOSO
 
             // Elección de estado SIGUELINEAS
-            if (digitalRead(BOTON_2) == HIGH)
+            if (digitalRead(BOTON_1) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::SIGUELINEAS;
+                delay(200);
+                estado_finito = SIGUELINEAS;
             }
 
             // Elección de estado CALIBRACION
             if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::CALIBRACION;
+                delay(200);
+                estado_finito = CALIBRACION;
             }
 
             break;
 
-            /*
-            * 2: Estado de calibración de los sensores
-            */
-        case TipoMaquinaEstadosFinitos::CALIBRACION:
+        /*
+         * 2: Estado de calibración de los sensores
+         */
+        case CALIBRACION:
 
             digitalWrite(LED_1, HIGH); // Señal de estado CALIBRACION
             digitalWrite(LED_2, LOW);
@@ -191,14 +194,15 @@ void loop()
             // Activado de la calibración
             if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (200);
+                delay(200);
                 REFERENCIA_COLOR = calibracionCNYS();
             }
+
             // Elección de estado SIGUELINEAS
             else if (digitalRead(BOTON_1) == HIGH)
             {
-                delay (200);
-                estado_finito = TipoMaquinaEstadosFinitos::SIGUELINEAS;
+                delay(200);
+                estado_finito = SIGUELINEAS;
             }
 
             break;
@@ -206,9 +210,9 @@ void loop()
         /*
          * 3: Estado normal de siguimiento de línea
          */
-        case TipoMaquinaEstadosFinitos::SIGUELINEAS:
+        case SIGUELINEAS:
 
-            // Si está a 0, realiza la cuenta atrás, si está a 1 la obvia
+            // Si está en false realiza la cuenta atrás, si está en true la obvia
             if (flag_salida == false)
             {
                 flag_salida = true;
@@ -224,46 +228,46 @@ void loop()
                 }
             }
 
-            // Se comprueban las marcas de parada
-            if (contador_parada_blanco > MARCA_PARADA_BLANCO || contador_parada_negro > MARCA_PARADA_NEGRO)
+            tiempo_ciclo = micros(); // Se mide el tiempo antes del PID
+
+            // Cada ciclo se ejecuta todo el proceso PID
+            if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_PID)
             {
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
-            }
+                tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
-            lecturaCnys(); // Lectura de los sensores
+                lecturaCnys(); // Lectura de los sensores
 
-            marcasFrenada(); // Se comprueban si hay marcas de parada tras la lectura
+                marcasFrenada(); // Se comprueban si hay marcas de parada tras la lectura
 
-            tiempo_comienzo = millis(); // Se mide el tiempo antes del PID
+                // Se comprueban las marcas de parada
+                if (contador_parada_blanco > MARCA_PARADA_BLANCO
+                    || contador_parada_negro > MARCA_PARADA_NEGRO)
+                {
+                    estado_finito = REPOSO;
+                }
 
-            // Se resetan los contadores de frenada si se sobrepasa un tiempo dado
-            if (tiempo_comienzo - tiempo_fin >= TIEMPO_RESETEO_MARCAS)
-            {
-                contador_parada_negro = 0;
-                contador_parada_blanco = 0;
-            }
+                // Se resetan los contadores de frenada si se sobrepasa un tiempo dado
+                if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_RESETEO_MARCAS)
+                {
+                    contador_parada_negro = 0;
+                    contador_parada_blanco = 0;
+                }
 
-            // Se aplica el control PID si se sobrepasa un tiempo dado
-            if (tiempo_comienzo - tiempo_fin >= TIEMPO_PID)
-            {
-                //Serial.println(millis());
-
+                // Se aplica el control PID
                 calculoDireccion(); // Cálculo de la dirección
-                controlPD(); // Cálculo del PID
-                actuacionMotores(control_pwm); // Actuación sobre los motores
-
-                tiempo_fin = millis(); // Se mide el tiempo después del PID
+                controlPID(); // Cálculo del PID
+                actuacionMotores(); // Actuación sobre los motores
             }
 
             // Elección de estado REPOSO
             if (digitalRead(BOTON_2) == HIGH)
             {
-                delay (500);
-                estado_finito = TipoMaquinaEstadosFinitos::REPOSO;
+                delay(500);
+                estado_finito = REPOSO;
             }
 
             break;
     }
 
-  //telemetria (); // Activamos la telemetría
+    //telemetria (); // Activamos la telemetría
 }

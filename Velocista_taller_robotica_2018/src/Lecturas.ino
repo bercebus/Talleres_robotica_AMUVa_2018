@@ -45,29 +45,29 @@ int calibracionCNYS()
     while (digitalRead(BOTON_2) != HIGH)
     {}
 
-        digitalWrite(LED_2, LOW);
-        delay (500);
+    digitalWrite(LED_2, LOW);
+    delay(500);
 
-        lectura_analogica_CNYS[0] = analogRead(CNY_1);
-        lectura_analogica_CNYS[1] = analogRead(CNY_2);
-        lectura_analogica_CNYS[2] = analogRead(CNY_3);
-        lectura_analogica_CNYS[3] = analogRead(CNY_4);
-        lectura_analogica_CNYS[4] = analogRead(CNY_5);
-        lectura_analogica_CNYS[5] = analogRead(CNY_6);
+    lectura_analogica_CNYS[0] = analogRead(CNY_1);
+    lectura_analogica_CNYS[1] = analogRead(CNY_2);
+    lectura_analogica_CNYS[2] = analogRead(CNY_3);
+    lectura_analogica_CNYS[3] = analogRead(CNY_4);
+    lectura_analogica_CNYS[4] = analogRead(CNY_5);
+    lectura_analogica_CNYS[5] = analogRead(CNY_6);
 
-        for (byte i = 0; i < 6; i++)
-        {
-            media_baja = media_baja + lectura_analogica_CNYS[i];
-        }
+    for (byte i = 0; i < 6; i++)
+    {
+        media_baja = media_baja + lectura_analogica_CNYS[i];
+    }
 
-        media_baja = media_baja / 6;
+    media_baja = media_baja / 6;
 
-        media_final = (media_alta + media_baja) / 2;
+    media_final = (media_alta + media_baja) / 2;
 
-        digitalWrite(LED_2, HIGH);
-        delay (500);
+    digitalWrite(LED_2, HIGH);
+    delay(500);
 
-        return(media_final);
+    return(media_final);
 }
 
 /*
