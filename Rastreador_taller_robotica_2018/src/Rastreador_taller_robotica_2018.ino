@@ -96,7 +96,7 @@ byte ancho_lectura; // Variable que mide el ancho de lectura en distancia
  */
 unsigned long tiempo_ciclo = 0;
 unsigned long tiempo_ciclo_anterior = 0;
-unsigned int TIEMPO_PID = 1200;
+unsigned int TIEMPO_PID = 1500;
 unsigned long TIEMPO_RESETEO_MARCAS = 5000000; // Equivale a 5 segundos
 
 /*
@@ -110,7 +110,7 @@ enum TipoMaquinaEstadosFinitos
     ELECCION_CAMINO
 };
 
-TipoMaquinaEstadosFinitos estado_finito = SIGUELINEAS;
+TipoMaquinaEstadosFinitos estado_finito = REPOSO;
 
 /*
  * VARIABLE PARA CONTROL DE SENTIDO DE GIRO DE LOS MOTORES
@@ -163,8 +163,8 @@ void setup()
 
     //configurarBluethoot(); // Función para configurar el Bluethoot
 
-    //Serial.begin(9600); // Inicia comunicaciones serie a 9600 bps
-    Serial.begin(115200); // Inicia comunicaciones serie a 115200 bps;
+    Serial.begin(9600); // Inicia comunicaciones serie a 9600 bps
+    //Serial.begin(115200); // Inicia comunicaciones serie a 115200 bps;
 
     controlMotores(0, 0); // Motores parados en el setup
 }
@@ -253,7 +253,7 @@ void loop()
 
             // Cada ciclo se ejecuta todo el proceso PID
             if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_PID)
-            { Serial.println(tiempo_ciclo - tiempo_ciclo_anterior);
+            {
                 tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
                 lecturaCnys(); // Lectura de los sensores
@@ -350,6 +350,13 @@ void loop()
             {
                 tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
+                // Se resetan los contadores de frenada si se sobrepasa un tiempo dado
+                if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_RESETEO_MARCAS)
+                {
+                    contador_parada_blanco = 0;
+                }
+
+                // En caso de estar mucho tiempo sobre blanco total se detiene el vehículo
                 if (contador_parada_blanco > MARCA_PARADA_BLANCO)
                 {
                     estado_finito = REPOSO;
@@ -364,13 +371,11 @@ void loop()
 
                 if (bifurcacion == false && bifurcacion_pasada == false && ancho_lectura <= 1)
                 {
-                    //calculoDireccionRecto (); // Cálculo de la dirección actual
                     calculoDireccionNormal(); // Cálculo de la dirección actual
                     controlPD(); // Cálculo del PID
                     actuacionMotores(); // Actuación sobre los motores
                 }
 
-                // PROBAR WHILE o IF
                 if (bifurcacion == true || ancho_lectura >= 3)
                 {
                     // Para indicar la detección de la bifurcación de forma visual
