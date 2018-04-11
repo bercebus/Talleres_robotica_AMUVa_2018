@@ -36,12 +36,12 @@ bool lectura_CNYS[8]; // Lectura de los sensores para el controlador PD
 /*
  *CONTROL PID
  */
-int VELOCIDAD_BASE = 50; // Velocidad base
+int VELOCIDAD_BASE = 70; // Velocidad base
 const int REFERENCIA_DIRECCION = 9; // Dirección de referencia
 
-int KP = 20; // Constante proporcional #40
+int KP = 15; // Constante proporcional
 int KI = 0;  // Constante integral
-int KD = 50; // Constante derivativa #2500
+int KD = 0; // Constante derivativa
 
 int direccion; // Dirección que se va a tomar en el PD
 int direccion_anterior; // Dirección anterior de la lectura de los sensores activos
@@ -346,7 +346,7 @@ void loop()
             tiempo_ciclo = micros(); // Se mide el tiempo antes del PID
 
             // Cada ciclo se ejecuta todo el proceso PID
-            if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_RESETEO_MARCAS)
+            if (tiempo_ciclo - tiempo_ciclo_anterior >= TIEMPO_PID)
             {
                 tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
