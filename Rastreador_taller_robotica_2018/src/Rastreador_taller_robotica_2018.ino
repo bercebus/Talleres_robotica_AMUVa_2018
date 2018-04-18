@@ -39,7 +39,7 @@ bool lectura_CNYS[8]; // Lectura de los sensores para el controlador PD
 int VELOCIDAD_BASE = 70; // Velocidad base
 const int REFERENCIA_DIRECCION = 9; // Dirección de referencia
 
-int KP = 15; // Constante proporcional
+int KP = 15; // Constante proporcional 15
 int KI = 0;  // Constante integral
 int KD = 0; // Constante derivativa
 
@@ -66,7 +66,7 @@ const int MARCA_PARADA_NEGRO = 350;  // Variable para el tiempo de parada en col
 byte numero_lineas; // Número de líneas detectadas en un momento dado
 
 int marca_real; // Valor mínimo para aceptar una marca como real y no falso positivo
-const int MARCA_MINIMA = 30; // Veces mínimas a detectar la marca para que sea real
+const int MARCA_MINIMA = 50; // Veces mínimas a detectar la marca para que sea real
 
 
 enum TipoSentidoMarca
@@ -257,6 +257,7 @@ void loop()
                 tiempo_ciclo_anterior = tiempo_ciclo; // Se sustituye el nuevo tiempo de ciclo
 
                 lecturaCnys(); // Lectura de los sensores
+                ancho_lectura = anchoLectura(sensorIzquierda(), sensorDerecha());
 
                 marcasFrenadaNegro(); // Se comprueban si hay marcas de parada tras la lectura
                 marcasFrenadaBlanco();
@@ -279,14 +280,14 @@ void loop()
 
                 // Cambiamos de estado finito si terminamos de leer la marca
                 // y se vuelve a tener sólo una línea
-                if ((marca_real > MARCA_MINIMA) && (numero_lineas == 1))
+                if ((marca_real > MARCA_MINIMA) && (numero_lineas == 1 && ancho_lectura <= 1))
                 {
                     estado_finito = ELECCION_CAMINO;
                     break;
                 }
 
                 // Se va comprobando si hay marcas y/o falsos positivos
-                if (numero_lineas <= 1) // Parece que no hay marcas
+                if (numero_lineas <= 1 && ancho_lectura <= 1) // Parece que no hay marcas
                 {
                     marca_real = 0;
                     digitalWrite(LED_1, LOW);
@@ -297,10 +298,10 @@ void loop()
                     actuacionMotores(); // Actuación sobre los motores
                 }
 
-                if (numero_lineas > 1) // Parece que hay una marca
+                if (numero_lineas > 1 || ancho_lectura >= 3)  // Parece que hay una marca
                 {
                     // Se espera para asegurar una lectura correcta del lado de la marca
-                    if (marca_real > 10 && marca_real < 15)
+                    if (marca_real > 49 && marca_real < 51)
                     {
                         sentido_marca = comprobarLadoMarca(); // Comprobación del lado de la marca
 
@@ -379,7 +380,9 @@ void loop()
                 if (bifurcacion == true || ancho_lectura >= 3)
                 {
                     // Para indicar la detección de la bifurcación de forma visual
+                    digitalWrite(LED_1, LOW);
                     digitalWrite(LED_2, LOW);
+                    digitalWrite(LED_3, LOW);
 
                     if (sentido_marca == DERECHO) // Marca a la derecha
                     {

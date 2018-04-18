@@ -152,7 +152,7 @@ TipoSentidoMarca comprobarLadoMarca()
     {
         return(IZQUIERDO); // Marca a la izquierda
     }
-    return TipoSentidoMarca::NINGUNO;
+    return NINGUNO;
 }
 
 /*
